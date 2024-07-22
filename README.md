@@ -1,33 +1,53 @@
-# gomarketme-react-native
-
-Affiliate Marketing for React Native-Based iOS and Android Apps.
+<div align="center">
+	<img src="https://static.gomarketme.net/assets/gmm-icon.png" alt="GoMarketMe"/>
+	<br>
+    <h1>gomarketme-react-native</h1>
+	<p>Affiliate Marketing for React Native-Based iOS and Android Apps.</p>
+</div>
 
 ## Installation
 
-```sh
+### Using npm
+
+```bash
 npm install gomarketme-react-native
 ```
 
-## Usage
+### Using yarn
 
+```bash
+yarn add gomarketme-react-native
+```
 
-```js
-import { multiply } from 'gomarketme-react-native';
+### Using pnpm
 
-// ...
-
-const result = await multiply(3, 7);
+```bash
+pnpm add gomarketme-react-native
 ```
 
 
-## Contributing
+## Usage
 
-See the [contributing guide](CONTRIBUTING.md) to learn how to contribute to the repository and the development workflow.
+To initialize GoMarketMe, import the `gomarketme` package and create a new instance of `GoMarketMe`:
 
-## License
+```tsx
+import GoMarketMe from 'gomarketme-react-native';
 
-MIT
+const App: React.FC = () => {
+  const apiKey = 'YOUR_API_KEY_HERE';
 
----
+  useEffect(() => {
+    const initializeGoMarketMe = async () => {
+      await GoMarketMe.initialize(apiKey);
+    };
 
-Made with [create-react-native-library](https://github.com/callstack/react-native-builder-bob)
+    initializeGoMarketMe();
+  }, []);
+};
+```
+
+Make sure to replace API_KEY with your actual GoMarketMe API key. You can find it on the product onboarding page and under Profile > API Key.
+
+## Support
+
+If you encounter any problems or issues, please contact us at [integrations@gomarketme.co](mailto:integrations@gomarketme.co) or visit [https://gomarketme.co](https://gomarketme.co).
