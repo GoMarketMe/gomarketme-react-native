@@ -1,5 +1,6 @@
 import { Platform, Dimensions, PixelRatio } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
+import getUserLocale from 'get-user-locale'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import InAppPurchase, { Purchase, Product, ProductPurchase } from 'react-native-iap';
 import axios from 'axios';
@@ -38,7 +39,7 @@ class GoMarketMe {
 
   private async addListener(apiKey: string): Promise<void> {
     InAppPurchase.purchaseUpdatedListener(async (purchase: Purchase) => {
-      if (this.affiliateCampaignCode) {
+      if (this.affiliateCampaignCode != '') {
         const productIds = await this.fetchPurchases([purchase], apiKey);
         await this.fetchPurchaseProducts(productIds, apiKey);
       }
@@ -50,18 +51,21 @@ class GoMarketMe {
       ios: await this.readIosDeviceInfo(),
       android: await this.readAndroidDeviceInfo(),
     });
-
+  
+    const devicePixelRatio = PixelRatio.get();
+    const dimension = Dimensions.get('window');
+  
     const windowData = {
-      devicePixelRatio: PixelRatio.get(),
-      width: Dimensions.get('window').width,
-      height: Dimensions.get('window').height,
+      devicePixelRatio: devicePixelRatio,
+      width: dimension.width * devicePixelRatio,
+      height: dimension.height * devicePixelRatio,
     };
-
+  
     return {
       device_info: deviceData,
       window_info: windowData,
-      time_zone_code: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      language_code: DeviceInfo.getDeviceId(),
+      time_zone: this.getTimeZone(),
+      language_code: this.getLanguageCode(),
     };
   }
 
@@ -99,6 +103,7 @@ class GoMarketMe {
         if (responseData.device_id) {
           this.deviceId = responseData.device_id;
         }
+
       } else {
         console.error('Failed to send system info. Status code:', response.status);
       }
@@ -108,29 +113,59 @@ class GoMarketMe {
   }
 
   private async readAndroidDeviceInfo(): Promise<any> {
+
+    let androidId = await DeviceInfo.getAndroidId();
+    let uniqueId = await DeviceInfo.getUniqueId();
+    let deviceId = await DeviceInfo.getDeviceId(); // model
+    let systemName = await DeviceInfo.getSystemName();
+    let systemVersion = await DeviceInfo.getSystemVersion()
+    let brand = await DeviceInfo.getBrand();
+    let model = await DeviceInfo.getModel();
+    let manufacturer = await DeviceInfo.getManufacturer();
+    let isEmulator = await DeviceInfo.isEmulator();
+
     return {
-      deviceId: await DeviceInfo.getDeviceId(),
-      systemName: await DeviceInfo.getSystemName(),
-      systemVersion: await DeviceInfo.getSystemVersion(),
-      brand: await DeviceInfo.getBrand(),
-      model: await DeviceInfo.getModel(),
-      manufacturer: await DeviceInfo.getManufacturer(),
-      isEmulator: await DeviceInfo.isEmulator(),
-      uniqueId: await DeviceInfo.getUniqueId(),
+      deviceId: androidId,
+      _deviceId: deviceId,
+      _uniqueId: uniqueId,
+      systemName: systemName,
+      systemVersion: systemVersion,
+      brand: brand,
+      model: model,
+      manufacturer: manufacturer,
+      isEmulator: isEmulator
     };
   }
 
   private async readIosDeviceInfo(): Promise<any> {
+
+    let uniqueId = await DeviceInfo.getUniqueId();
+    let deviceId = await DeviceInfo.getDeviceId(); // model
+    let systemName = await DeviceInfo.getSystemName();
+    let systemVersion = await DeviceInfo.getSystemVersion()
+    let brand = await DeviceInfo.getBrand();
+    let model = await DeviceInfo.getModel();
+    let manufacturer = await DeviceInfo.getManufacturer();
+    let isEmulator = await DeviceInfo.isEmulator();
+
     return {
-      deviceId: await DeviceInfo.getDeviceId(),
-      systemName: await DeviceInfo.getSystemName(),
-      systemVersion: await DeviceInfo.getSystemVersion(),
-      brand: await DeviceInfo.getBrand(),
-      model: await DeviceInfo.getModel(),
-      manufacturer: await DeviceInfo.getManufacturer(),
-      isEmulator: await DeviceInfo.isEmulator(),
-      uniqueId: await DeviceInfo.getUniqueId(),
+      deviceId: uniqueId,
+      _deviceId: deviceId,
+      systemName: systemName,
+      systemVersion: systemVersion,
+      brand: brand,
+      model: model,
+      manufacturer: manufacturer,
+      isEmulator: isEmulator
     };
+  }
+
+  private getTimeZone = (): string => {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+};
+
+  private getLanguageCode(): string {
+    return getUserLocale();
   }
 
   private async fetchPurchases(purchaseDetailsList: Purchase[], apiKey: string): Promise<string[]> {

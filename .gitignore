@@ -80,3 +80,7 @@ lib/
 
 node_modules/
 dist/
+
+
+# misc
+*.tgz
