@@ -1,6 +1,6 @@
 {
   "name": "gomarketme-react-native",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Affiliate Marketing for React Native-Based iOS and Android Apps.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -2,7 +2,7 @@ import { Platform, Dimensions, PixelRatio } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import getUserLocale from 'get-user-locale'
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import InAppPurchase, { Purchase, Product, ProductPurchase } from 'react-native-iap';
+import InAppPurchase, { Purchase, Product, Subscription } from 'react-native-iap';
 import axios from 'axios';
 
 class GoMarketMe {
@@ -189,7 +189,14 @@ class GoMarketMe {
           await this.sendEventToServer(JSON.stringify(this.serializeProductDetails(product)), 'product', apiKey);
         }
       } else {
-        await this.sendEventToServer(JSON.stringify({ notFoundIDs: productIds.join(',') }), 'product', apiKey);
+        const products = await InAppPurchase.getSubscriptions(productIds);
+        if (products.length > 0) {
+          for (const product of products) {
+            await this.sendEventToServer(JSON.stringify(this.serializeSubscriptionDetails(product)), 'product', apiKey);
+          }
+        } else {
+          await this.sendEventToServer(JSON.stringify({ notFoundIDs: productIds.join(',') }), 'product', apiKey);
+        }
       }
     } catch (e) {
       console.error('Error fetching products:', e);
@@ -242,6 +249,17 @@ class GoMarketMe {
       productPrice: product.price,
       productRawPrice: product.price,
       productCurrencyCode: product.currency,
+    };
+  }
+
+  private serializeSubscriptionDetails(subscription: Subscription): any {
+    return {
+      productID: subscription.productId,
+      productTitle: subscription.title,
+      productDescription: subscription.description,
+      productPrice: subscription.price,
+      productRawPrice: subscription.price,
+      productCurrencyCode: subscription.currency,
     };
   }
 
