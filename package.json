@@ -1,6 +1,6 @@
 {
   "name": "gomarketme-react-native",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "description": "Affiliate Marketing for React Native-Based iOS and Android Apps.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,7 +22,7 @@
     "axios": "^0.21.1",
     "get-user-locale": "^2.3.2",
     "react-native-device-info": "^14.0.0",
-    "react-native-iap": "^7.0.0"
+    "react-native-iap": "^12.16.0"
   },
   "devDependencies": {
     "@types/node": "^15.12.5",

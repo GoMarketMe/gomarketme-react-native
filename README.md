@@ -10,19 +10,19 @@
 ### Using npm
 
 ```bash
-npm install gomarketme-react-native
+npm install gomarketme-react-native@2.0.0
 ```
 
 ### Using yarn
 
 ```bash
-yarn add gomarketme-react-native
+yarn add gomarketme-react-native@2.0.0
 ```
 
 ### Using pnpm
 
 ```bash
-pnpm add gomarketme-react-native
+pnpm add gomarketme-react-native@2.0.0
 ```
 
 
@@ -34,14 +34,11 @@ To initialize GoMarketMe, import the `gomarketme` package and create a new insta
 import GoMarketMe from 'gomarketme-react-native';
 
 const App: React.FC = () => {
-  const apiKey = 'YOUR_API_KEY_HERE';
 
   useEffect(() => {
-    const initializeGoMarketMe = async () => {
-      await GoMarketMe.initialize(apiKey);
-    };
 
-    initializeGoMarketMe();
+    GoMarketMe.initialize('API_KEY'); // Initialize with your API key
+
   }, []);
 };
 ```
