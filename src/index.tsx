@@ -135,7 +135,7 @@ export class SaleDistribution {
 class GoMarketMe {
   private static instance: GoMarketMe;
   private sdkType = 'ReactNative';
-  private sdkVersion = '4.0.0';
+  private sdkVersion = '4.0.1';
   private sdkInitializedKey = 'GOMARKETME_SDK_INITIALIZED';
   private sdkInitializationUrl =
     'https://4v9008q1a5.execute-api.us-west-2.amazonaws.com/prod/v1/sdk-initialization';

@@ -1,9 +1,13 @@
 {
   "name": "gomarketme-react-native",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Affiliate Marketing for React Native-Based iOS and Android Apps.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GoMarketMe/gomarketme-react-native.git"
+  },
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build",
@@ -12,8 +16,17 @@
   "homepage": "https://gomarketme.co",
   "keywords": [
     "react-native",
+    "affiliate-marketing",
+    "influencer-marketing",
+    "in-app-purchases",
+    "subscriptions",
     "gomarketme",
-    "sdk"
+    "sdk",
+    "iOS",
+    "Android",
+    "mobile",
+    "monetization",
+    "influencers"
   ],
   "author": "GoMarketMe",
   "license": "MIT",
