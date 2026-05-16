@@ -10,9 +10,19 @@ Pod::Spec.new do |s|
   s.license      = package['license']
   s.author       = package['author']
   s.source       = { :git => package['repository']['url'], :tag => s.version.to_s }
+
   s.platforms    = { :ios => '15.0' }
   s.source_files = 'ios/**/*.{h,m,mm,swift}'
+
+  # GoMarketMeAppleCoreKit.xcframework is built as a static XCFramework.
   s.vendored_frameworks = 'ios/Frameworks/GoMarketMeAppleCoreKit.xcframework'
+  s.static_framework = true
+
   s.dependency 'React-Core'
   s.swift_version = '5.9'
+
+  s.pod_target_xcconfig = {
+    'DEFINES_MODULE' => 'YES',
+    'SWIFT_VERSION' => '5.9'
+  }
 end
