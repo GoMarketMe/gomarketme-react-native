@@ -10,19 +10,19 @@
 ### npm
 
 ```bash
-npm install gomarketme-react-native@5.0.4
+npm install gomarketme-react-native@5.0.5
 ```
 
 ### Yarn
 
 ```bash
-yarn add gomarketme-react-native@5.0.4
+yarn add gomarketme-react-native@5.0.5
 ```
 
 ### pnpm
 
 ```bash
-pnpm add gomarketme-react-native@5.0.4
+pnpm add gomarketme-react-native@5.0.5
 ```
 
 
