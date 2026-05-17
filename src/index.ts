@@ -188,7 +188,7 @@ export class SaleDistribution {
 class GoMarketMe {
   private static instance: GoMarketMe;
   private readonly sdkType = 'ReactNative';
-  private readonly sdkVersion = '5.0.5';
+  private readonly sdkVersion = '5.0.6';
   private isInitializing = false;
   private isInitialized = false;
   public affiliateMarketingData?: GoMarketMeAffiliateMarketingData | null;
