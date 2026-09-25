@@ -10,19 +10,19 @@
 ### npm
 
 ```bash
-npm install gomarketme-react-native@5.0.6
+npm install gomarketme-react-native@6.0.0
 ```
 
 ### Yarn
 
 ```bash
-yarn add gomarketme-react-native@5.0.6
+yarn add gomarketme-react-native@6.0.0
 ```
 
 ### pnpm
 
 ```bash
-pnpm add gomarketme-react-native@5.0.6
+pnpm add gomarketme-react-native@6.0.0
 ```
 
 
@@ -30,7 +30,7 @@ pnpm add gomarketme-react-native@5.0.6
 
 GoMarketMe takes only a few lines to set up.
 
-### Step 1/3: Initialize
+### Step 1: Initialize
 
 Import `gomarketme-react-native` and initialize the SDK with your GoMarketMe API key.
 
@@ -49,67 +49,17 @@ useEffect(() => {
 
 Replace `API_KEY` with your actual GoMarketMe API key. You can find it during onboarding or in **Profile > [API Key](https://gomarketme.net/marketer/profile/#account-settings)**.
 
-### Alternative Step 1/3: Programmatic Affiliate Marketing
+### Step 2: Sync Purchases (recommended)
 
-For apps that want to customize the user experience based on affiliate attribution, initialize GoMarketMe and read affiliate marketing data after initialization.
-
-This enables [Programmatic Affiliate Marketing](https://gomarketme.co/programmatic-affiliate-marketing/), including affiliate-aware paywalls, personalized onboarding, promotions, and custom in-app experiences.
-
-```tsx
-import { useEffect, useState } from 'react';
-import GoMarketMe, {
-  GoMarketMeAffiliateMarketingData,
-} from 'gomarketme-react-native';
-
-const [affiliateData, setAffiliateData] =
-  useState<GoMarketMeAffiliateMarketingData | null>(null);
-
-useEffect(() => {
-  const initializeGoMarketMe = async () => {
-    await GoMarketMe.initialize('API_KEY');
-
-    const data = GoMarketMe.affiliateMarketingData;
-
-    if (!data) {
-      return;
-    }
-
-    // Maps to GoMarketMe > Affiliates > Export > id column.
-    console.log('Affiliate ID:', data.affiliate?.id);
-
-    // Maps to GoMarketMe > Campaigns > [Name] > Affiliate's Revenue Split (%).
-    console.log('Affiliate %:', data.saleDistribution?.affiliatePercentage);
-
-    // Maps to GoMarketMe > Campaigns > [Name] > id in the URL.
-    console.log('Campaign ID:', data.campaign?.id);
-
-    // Use this data to customize onboarding, paywalls, promotions, or in-app experiences.
-    setAffiliateData(data);
-  };
-
-  initializeGoMarketMe();
-}, []);
-```
-
-### Step 2/3: Sync after purchase
-
-After your app completes a purchase through `react-native-iap`, `expo-iap`, RevenueCat, Adapty, or another in-app purchase provider, call:
+GoMarketMe automatically detects and reports purchases. For additional reliability, we also recommend manually syncing after `react-native-iap`, `expo-iap`, RevenueCat, Adapty, or another provider confirms a successful purchase:
 
 ```tsx
 await GoMarketMe.syncAllTransactions();
 ```
 
-If your purchase library lets you decide when to finish, acknowledge, consume, or complete the transaction, call `syncAllTransactions()` first.
+Call it before finishing the transaction when your purchase library controls that step.
 
-```tsx
-purchaseUpdateSub = purchaseUpdatedListener(async purchase => {
-  await GoMarketMe.syncAllTransactions();
-
-  await finishTransaction({ purchase, isConsumable: true });
-});
-```
-
-### Step 3/3: iOS consumables only
+### Step 3: Only for iOS consumables
 
 If your iOS app sells consumable in-app purchases, add this key to your app's `Info.plist`:
 
@@ -118,7 +68,44 @@ If your iOS app sells consumable in-app purchases, add this key to your app's `I
 <true/>
 ```
 
-That's it. GoMarketMe automatically attributes and reports affiliate sales.
+That's it. GoMarketMe will automatically attribute and report affiliate sales in real time to your dashboard and your affiliates' dashboards.
+
+## Optional
+
+### Step 4: Referral Codes
+
+Referral codes work alongside affiliate links when a link isn't practical, such as in conversations, podcasts, videos, events, or print.
+
+Enable Referral Codes in one line:
+
+```tsx
+<GoMarketMeReferralCodeTrigger />
+```
+
+**Placement:** Put this referral UI on the first screen users see after installing the app, ideally during onboarding or immediately afterward.
+
+Customize its text, colors, typography, and layout directly in [https://gomarketme.net/marketer/settings#referral-codes](https://gomarketme.net/marketer/settings#referral-codes).
+
+Learn more about [Referral Codes](https://gomarketme.co/referral-codes/).
+
+### Step 5: Programmatic Affiliate Marketing
+
+Programmatic Affiliate Marketing lets your app personalize the user experience based on the affiliate and campaign that referred the user. For example, you can customize onboarding, paywalls, offers, or in-app content.
+
+After awaiting initialization, read `affiliateMarketingData`:
+
+```tsx
+await GoMarketMe.initialize('API_KEY');
+
+const data = GoMarketMe.affiliateMarketingData;
+if (data) {
+  console.log('Affiliate ID:', data.affiliate?.id);
+  console.log('Affiliate %:', data.saleDistribution?.affiliatePercentage);
+  console.log('Campaign ID:', data.campaign?.id);
+}
+```
+
+Learn more about [Programmatic Affiliate Marketing](https://gomarketme.co/programmatic-affiliate-marketing/).
 
 ## Platform Support
 

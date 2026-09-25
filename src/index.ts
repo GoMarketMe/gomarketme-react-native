@@ -1,4 +1,11 @@
-import { NativeModules } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  NativeModules,
+  Pressable,
+  Text,
+  View,
+  type TextStyle,
+} from 'react-native';
 
 declare const __DEV__: boolean;
 
@@ -7,6 +14,8 @@ const LINKING_ERROR =
 
 type NativeGoMarketMeModule = {
   initialize(apiKey: string, sdkType: string, sdkVersion: string, isProduction: boolean): Promise<InitializeResponse>;
+  getReferralCodeSettings(): Promise<Record<string, unknown>>;
+  showReferralCodeSheet(showTrigger: boolean): Promise<Record<string, unknown> | null>;
   syncAllTransactions?(): Promise<SyncAllTransactionsResponse>;
   stop?(): void;
 };
@@ -32,6 +41,7 @@ export class GoMarketMeAffiliateMarketingData {
   affiliateCampaignCode: string;
   deviceId: string;
   offerCode?: string;
+  referralCode?: string;
 
   constructor(
     campaign: Campaign,
@@ -39,7 +49,8 @@ export class GoMarketMeAffiliateMarketingData {
     saleDistribution: SaleDistribution,
     affiliateCampaignCode: string,
     deviceId: string,
-    offerCode?: string
+    offerCode?: string,
+    referralCode?: string
   ) {
     this.campaign = campaign;
     this.affiliate = affiliate;
@@ -47,6 +58,7 @@ export class GoMarketMeAffiliateMarketingData {
     this.affiliateCampaignCode = affiliateCampaignCode;
     this.deviceId = deviceId;
     this.offerCode = offerCode;
+    this.referralCode = referralCode;
   }
 
   static fromJson(json?: Record<string, unknown> | null): GoMarketMeAffiliateMarketingData | null {
@@ -60,7 +72,8 @@ export class GoMarketMeAffiliateMarketingData {
       SaleDistribution.fromJson(asRecord(json.sale_distribution)),
       asString(json.affiliate_campaign_code),
       asString(json.device_id),
-      json.offer_code == null ? undefined : String(json.offer_code)
+      json.offer_code == null ? undefined : String(json.offer_code),
+      json.referral_code == null ? undefined : String(json.referral_code)
     );
   }
 
@@ -72,6 +85,7 @@ export class GoMarketMeAffiliateMarketingData {
       affiliate_campaign_code: this.affiliateCampaignCode,
       device_id: this.deviceId,
       offer_code: this.offerCode,
+      referral_code: this.referralCode,
     };
   }
 }
@@ -188,9 +202,10 @@ export class SaleDistribution {
 class GoMarketMe {
   private static instance: GoMarketMe;
   private readonly sdkType = 'ReactNative';
-  private readonly sdkVersion = '5.0.6';
+  private readonly sdkVersion = '6.0.0';
   private isInitializing = false;
   private isInitialized = false;
+  private initializationPromise?: Promise<void>;
   public affiliateMarketingData?: GoMarketMeAffiliateMarketingData | null;
 
   private constructor() {}
@@ -215,30 +230,47 @@ class GoMarketMe {
       return;
     }
 
-    if (this.isInitialized || this.isInitializing) {
+    if (this.isInitialized) {
       log('Initialization skipped because SDK is already initialized or initializing.');
       return;
     }
 
-    this.isInitializing = true;
-
-    try {
-      const response = await nativeModule().initialize(
-        trimmedApiKey,
-        this.sdkType,
-        this.sdkVersion,
-        !__DEV__
-      );
-
-      this.affiliateMarketingData = GoMarketMeAffiliateMarketingData.fromJson(
-        response.affiliateMarketingData ?? null
-      );
-      this.isInitialized = true;
-    } catch (error) {
-      log(`Error initializing GoMarketMe: ${String(error)}`);
-    } finally {
-      this.isInitializing = false;
+    if (this.initializationPromise) {
+      return this.initializationPromise;
     }
+
+    this.isInitializing = true;
+    this.initializationPromise = (async () => {
+      try {
+        const response = await nativeModule().initialize(
+          trimmedApiKey,
+          this.sdkType,
+          this.sdkVersion,
+          !__DEV__
+        );
+
+        this.affiliateMarketingData = GoMarketMeAffiliateMarketingData.fromJson(
+          response.affiliateMarketingData ?? null
+        );
+        this.isInitialized = true;
+      } catch (error) {
+        log(`Error initializing GoMarketMe: ${String(error)}`);
+      } finally {
+        this.isInitializing = false;
+      }
+    })();
+    return this.initializationPromise;
+  }
+
+  public async referralCodeSettings(): Promise<Record<string, unknown>> {
+    // React runs child effects before parent effects. Give a parent that calls
+    // initialize() on mount one turn to register its initialization promise.
+    if (!this.initializationPromise && !this.isInitialized) {
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+    }
+    if (this.initializationPromise) await this.initializationPromise;
+    if (!this.isInitialized) throw new Error('Initialize GoMarketMe before loading referral settings.');
+    return nativeModule().getReferralCodeSettings();
   }
 
   public async syncAllTransactions(): Promise<SyncAllTransactionsResponse> {
@@ -255,11 +287,178 @@ class GoMarketMe {
     return syncAllTransactions();
   }
 
+  /** Resolves on apply or cancellation; attribution is updated before resolution. */
+  public async showReferralCodeSheet(showTrigger = false): Promise<GoMarketMeAffiliateMarketingData | null> {
+    if (!this.isInitialized) throw new Error('Initialize GoMarketMe before showing the referral sheet.');
+    const response = await nativeModule().showReferralCodeSheet(showTrigger);
+    if (response == null) return null;
+    const data = GoMarketMeAffiliateMarketingData.fromJson(response);
+    this.affiliateMarketingData = data;
+    return data;
+  }
+
   public stop(): void {
     nativeModule().stop?.();
     this.isInitialized = false;
     this.isInitializing = false;
+    this.initializationPromise = undefined;
   }
+}
+
+export type GoMarketMeReferralCodeTriggerProps = {
+  onResult?: (data: GoMarketMeAffiliateMarketingData | null) => void;
+  onError?: (error: unknown) => void;
+};
+
+type TriggerSettings = {
+  triggerType: 'link' | 'button';
+  triggerText: string;
+  triggerAlignment: 'left' | 'center' | 'right';
+  triggerFontSize: number;
+  triggerFontWeight: TextStyle['fontWeight'];
+  triggerLinkColor: string;
+  triggerLinkUnderline: boolean;
+  triggerButtonBackground: string;
+  triggerButtonTextColor: string;
+  triggerButtonBorder: string;
+  triggerButtonBorderWidth: number;
+  triggerButtonBorderRadius: number;
+  triggerButtonPaddingHorizontal: number;
+  triggerButtonPaddingVertical: number;
+  family?: string;
+};
+
+const defaultTriggerSettings: TriggerSettings = {
+  triggerType: 'link',
+  triggerText: 'Have a referral code?',
+  triggerAlignment: 'center',
+  triggerFontSize: 15,
+  triggerFontWeight: '500',
+  triggerLinkColor: '#1F2937',
+  triggerLinkUnderline: false,
+  triggerButtonBackground: '#3B82F6',
+  triggerButtonTextColor: '#FFFFFF',
+  triggerButtonBorder: '#3B82F6',
+  triggerButtonBorderWidth: 1,
+  triggerButtonBorderRadius: 10,
+  triggerButtonPaddingHorizontal: 16,
+  triggerButtonPaddingVertical: 10,
+};
+
+/** Remotely configured referral-code trigger. Renders after settings load. */
+export function GoMarketMeReferralCodeTrigger({
+  onResult,
+  onError,
+}: GoMarketMeReferralCodeTriggerProps): React.ReactElement | null {
+  const sdk = GoMarketMe.getInstance();
+  const [settings, setSettings] = useState<TriggerSettings | null>(null);
+  const [opening, setOpening] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    sdk.referralCodeSettings()
+      .then(response => {
+        if (active) setSettings(normalizeTriggerSettings(response));
+      })
+      .catch(error => {
+        if (active) setSettings(defaultTriggerSettings);
+        onError?.(error);
+      });
+    return () => { active = false; };
+  }, [sdk]);
+
+  if (!settings) return null;
+  const isLink = settings.triggerType === 'link';
+  const alignItems = settings.triggerAlignment === 'left'
+    ? 'flex-start'
+    : settings.triggerAlignment === 'right'
+      ? 'flex-end'
+      : 'center';
+
+  const open = async () => {
+    if (opening) return;
+    setOpening(true);
+    try {
+      onResult?.(await sdk.showReferralCodeSheet());
+    } catch (error) {
+      onError?.(error);
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  return React.createElement(
+    View,
+    { style: { alignSelf: 'stretch', alignItems } },
+    React.createElement(
+      Pressable,
+      {
+        accessibilityRole: 'button',
+        accessibilityLabel: settings.triggerText,
+        disabled: opening,
+        onPress: open,
+        style: {
+          minHeight: 44,
+          justifyContent: 'center',
+          opacity: opening ? 0.6 : 1,
+          backgroundColor: isLink ? 'transparent' : settings.triggerButtonBackground,
+          borderColor: isLink ? 'transparent' : settings.triggerButtonBorder,
+          borderWidth: isLink ? 0 : settings.triggerButtonBorderWidth,
+          borderRadius: settings.triggerButtonBorderRadius,
+          paddingHorizontal: isLink ? 0 : settings.triggerButtonPaddingHorizontal,
+          paddingVertical: isLink ? 0 : settings.triggerButtonPaddingVertical,
+        },
+      },
+      React.createElement(Text, {
+        style: {
+          color: isLink ? settings.triggerLinkColor : settings.triggerButtonTextColor,
+          fontFamily: settings.family,
+          fontSize: settings.triggerFontSize,
+          fontWeight: settings.triggerFontWeight,
+          textDecorationLine: isLink && settings.triggerLinkUnderline ? 'underline' : 'none',
+        },
+      }, settings.triggerText)
+    )
+  );
+}
+
+function normalizeTriggerSettings(response: Record<string, unknown>): TriggerSettings {
+  const marketer = asRecord(response.marketer_settings);
+  const defaults = asRecord(response.default_settings);
+  const supplied = Object.keys(marketer).length > 0 ? marketer : Object.keys(defaults).length > 0 ? defaults : response;
+  const text = (key: string, fallback: string) => typeof supplied[key] === 'string' ? String(supplied[key]) : fallback;
+  const number = (key: string, fallback: number, minimum = 0) => {
+    const value = typeof supplied[key] === 'number' && Number.isFinite(supplied[key]) ? Number(supplied[key]) : fallback;
+    return Math.max(minimum, Math.min(200, value));
+  };
+  const color = (key: string, fallback: string) => {
+    const value = text(key, fallback);
+    return /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value) ? value : fallback;
+  };
+  const fontWeight = text('triggerFontWeight', '500');
+  const validFontWeights = new Set([
+    'normal', 'bold',
+    '100', '200', '300', '400', '500', '600', '700', '800', '900',
+  ]);
+  const triggerType = text('triggerType', 'link');
+  const triggerAlignment = text('triggerAlignment', 'center');
+  return {
+    triggerType: triggerType === 'button' ? 'button' : 'link',
+    triggerText: text('triggerText', defaultTriggerSettings.triggerText),
+    triggerAlignment: triggerAlignment === 'left' || triggerAlignment === 'right' ? triggerAlignment : 'center',
+    triggerFontSize: number('triggerFontSize', 15, 10),
+    triggerFontWeight: (validFontWeights.has(fontWeight) ? fontWeight : '500') as TextStyle['fontWeight'],
+    triggerLinkColor: color('triggerLinkColor', '#1F2937'),
+    triggerLinkUnderline: typeof supplied.triggerLinkUnderline === 'boolean' ? supplied.triggerLinkUnderline : false,
+    triggerButtonBackground: color('triggerButtonBackground', '#3B82F6'),
+    triggerButtonTextColor: color('triggerButtonTextColor', '#FFFFFF'),
+    triggerButtonBorder: color('triggerButtonBorder', '#3B82F6'),
+    triggerButtonBorderWidth: number('triggerButtonBorderWidth', 1),
+    triggerButtonBorderRadius: number('triggerButtonBorderRadius', 10),
+    triggerButtonPaddingHorizontal: number('triggerButtonPaddingHorizontal', 16),
+    triggerButtonPaddingVertical: number('triggerButtonPaddingVertical', 10),
+    family: typeof supplied.family === 'string' && supplied.family ? supplied.family : undefined,
+  };
 }
 
 function nativeModule(): NativeGoMarketMeModule {

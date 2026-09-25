@@ -112,6 +112,33 @@ class GoMarketMeReactNativeModule(
     }
 
     @ReactMethod
+    fun getReferralCodeSettings(promise: Promise) {
+        val googleCore = core
+        if (googleCore == null) {
+            promise.reject("not_initialized", "Initialize GoMarketMe first.")
+            return
+        }
+        scope.launch {
+            try { promise.resolve(googleCore.referralCodeSettings().toWritableMap()) }
+            catch (error: Exception) { promise.reject("referral_settings_failed", error.message, error) }
+        }
+    }
+
+    @ReactMethod
+    fun showReferralCodeSheet(showTrigger: Boolean, promise: Promise) {
+        val googleCore = core
+        val activity = reactContext.currentActivity
+        if (googleCore == null || activity == null) {
+            promise.reject("unavailable", "Initialize GoMarketMe with an active Activity first.")
+            return
+        }
+        scope.launch {
+            try { googleCore.showReferralCodeSheet(activity, showTrigger) { promise.resolve(it?.toWritableMap()) } }
+            catch (error: Exception) { promise.reject("referral_failed", error.message, error) }
+        }
+    }
+
+    @ReactMethod
     fun stop() {
         core?.stop()
         core = null

@@ -87,6 +87,30 @@ class GoMarketMeReactNative: NSObject {
         }
     }
 
+    @objc(showReferralCodeSheet:resolver:rejecter:)
+    func showReferralCodeSheet(showTrigger: Bool, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        guard #available(iOS 15.0, *), let appleCore = core as? GoMarketMeAppleCore else {
+            reject("not_initialized", "Initialize GoMarketMe first.", nil)
+            return
+        }
+        Task { @MainActor in
+            do { try await appleCore.showReferralCodeSheet(showTrigger: showTrigger) { resolve($0) } }
+            catch { reject("referral_failed", error.localizedDescription, error) }
+        }
+    }
+
+    @objc(getReferralCodeSettings:rejecter:)
+    func getReferralCodeSettings(resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        guard #available(iOS 15.0, *), let appleCore = core as? GoMarketMeAppleCore else {
+            reject("not_initialized", "Initialize GoMarketMe first.", nil)
+            return
+        }
+        Task {
+            do { resolve(try await appleCore.referralCodeSettings()) }
+            catch { reject("referral_settings_failed", error.localizedDescription, error) }
+        }
+    }
+
     @objc(syncAllTransactions:rejecter:)
     func syncAllTransactions(
         resolve: @escaping RCTPromiseResolveBlock,
