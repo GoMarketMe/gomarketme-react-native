@@ -19,6 +19,10 @@ RCT_EXTERN_METHOD(showReferralCodeSheet:(BOOL)showTrigger
 RCT_EXTERN_METHOD(getReferralCodeSettings:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(redeemReferralCode:(NSString *)code
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(stop)
 
 @end

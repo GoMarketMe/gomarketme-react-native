@@ -111,6 +111,50 @@ class GoMarketMeReactNative: NSObject {
         }
     }
 
+    @objc(redeemReferralCode:resolver:rejecter:)
+    func redeemReferralCode(
+        code: String,
+        resolve: @escaping RCTPromiseResolveBlock,
+        reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard #available(iOS 15.0, *), let appleCore = core as? GoMarketMeAppleCore else {
+            reject("not_initialized", "Initialize GoMarketMe first.", nil)
+            return
+        }
+        Task {
+            do { resolve(try await appleCore.redeemReferralCode(code)) }
+            catch {
+                let details = Self.referralErrorDetails(error)
+                reject("referral_code_error", error.localizedDescription, details)
+            }
+        }
+    }
+
+    private static func referralErrorDetails(_ error: Error) -> NSError {
+        let rawCode: String
+        let statusCode: Int?
+        if let referralError = error as? GoMarketMeReferralError {
+            rawCode = referralError.code
+            statusCode = referralError.statusCode > 0 ? referralError.statusCode : nil
+        } else if let urlError = error as? URLError {
+            rawCode = urlError.code == .timedOut ? "timeout" : "network_error"
+            statusCode = nil
+        } else {
+            rawCode = "request_failed"
+            statusCode = nil
+        }
+        let isRetryable = rawCode == "network_error" || rawCode == "timeout" ||
+            statusCode == 408 || statusCode == 425 || statusCode == 429 ||
+            (statusCode.map { $0 >= 500 } ?? false)
+        var userInfo: [String: Any] = [
+            NSLocalizedDescriptionKey: error.localizedDescription,
+            "code": rawCode,
+            "isRetryable": isRetryable
+        ]
+        if let statusCode { userInfo["statusCode"] = statusCode }
+        return NSError(domain: "GoMarketMeReferralCode", code: statusCode ?? 0, userInfo: userInfo)
+    }
+
     @objc(syncAllTransactions:rejecter:)
     func syncAllTransactions(
         resolve: @escaping RCTPromiseResolveBlock,

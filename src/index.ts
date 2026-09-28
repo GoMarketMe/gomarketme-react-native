@@ -16,9 +16,46 @@ type NativeGoMarketMeModule = {
   initialize(apiKey: string, sdkType: string, sdkVersion: string, isProduction: boolean): Promise<InitializeResponse>;
   getReferralCodeSettings(): Promise<Record<string, unknown>>;
   showReferralCodeSheet(showTrigger: boolean): Promise<Record<string, unknown> | null>;
+  redeemReferralCode(code: string): Promise<Record<string, unknown>>;
   syncAllTransactions?(): Promise<SyncAllTransactionsResponse>;
   stop?(): void;
 };
+
+export type GoMarketMeMetadata = Record<string, unknown>;
+
+export enum GoMarketMeReferralCodeErrorCode {
+  InvalidCode = 'invalid_code',
+  ExpiredCode = 'expired_code',
+  InactiveCode = 'inactive_code',
+  InvalidResponse = 'invalid_response',
+  RequestFailed = 'request_failed',
+  NetworkError = 'network_error',
+  Timeout = 'timeout',
+  NotInitialized = 'not_initialized',
+  Unknown = 'unknown',
+}
+
+export class GoMarketMeReferralCodeError extends Error {
+  readonly code: GoMarketMeReferralCodeErrorCode;
+  readonly rawCode: string;
+  readonly statusCode?: number;
+  readonly isRetryable: boolean;
+
+  constructor(
+    code: GoMarketMeReferralCodeErrorCode,
+    rawCode: string,
+    message: string,
+    statusCode?: number,
+    isRetryable = false
+  ) {
+    super(message);
+    this.name = 'GoMarketMeReferralCodeError';
+    this.code = code;
+    this.rawCode = rawCode;
+    this.statusCode = statusCode;
+    this.isRetryable = isRetryable;
+  }
+}
 
 export type InitializeResponse = {
   initialized: boolean;
@@ -37,6 +74,7 @@ export type SyncAllTransactionsResponse = {
 export class GoMarketMeAffiliateMarketingData {
   campaign: Campaign;
   affiliate: Affiliate;
+  affiliateCampaign: AffiliateCampaign;
   saleDistribution: SaleDistribution;
   affiliateCampaignCode: string;
   deviceId: string;
@@ -50,7 +88,8 @@ export class GoMarketMeAffiliateMarketingData {
     affiliateCampaignCode: string,
     deviceId: string,
     offerCode?: string,
-    referralCode?: string
+    referralCode?: string,
+    affiliateCampaign: AffiliateCampaign = new AffiliateCampaign()
   ) {
     this.campaign = campaign;
     this.affiliate = affiliate;
@@ -59,6 +98,7 @@ export class GoMarketMeAffiliateMarketingData {
     this.deviceId = deviceId;
     this.offerCode = offerCode;
     this.referralCode = referralCode;
+    this.affiliateCampaign = affiliateCampaign;
   }
 
   static fromJson(json?: Record<string, unknown> | null): GoMarketMeAffiliateMarketingData | null {
@@ -73,7 +113,8 @@ export class GoMarketMeAffiliateMarketingData {
       asString(json.affiliate_campaign_code),
       asString(json.device_id),
       json.offer_code == null ? undefined : String(json.offer_code),
-      json.referral_code == null ? undefined : String(json.referral_code)
+      json.referral_code == null ? undefined : String(json.referral_code),
+      AffiliateCampaign.fromJson(asRecord(json.affiliate_campaign))
     );
   }
 
@@ -81,6 +122,7 @@ export class GoMarketMeAffiliateMarketingData {
     return {
       campaign: this.campaign.toJson(),
       affiliate: this.affiliate.toJson(),
+      affiliate_campaign: this.affiliateCampaign.toJson(),
       sale_distribution: this.saleDistribution.toJson(),
       affiliate_campaign_code: this.affiliateCampaignCode,
       device_id: this.deviceId,
@@ -96,13 +138,15 @@ export class Campaign {
   status: string;
   type: string;
   publicLinkUrl?: string;
+  metadata: GoMarketMeMetadata;
 
-  constructor(id: string, name: string, status: string, type: string, publicLinkUrl?: string) {
+  constructor(id: string, name: string, status: string, type: string, publicLinkUrl?: string, metadata: GoMarketMeMetadata = {}) {
     this.id = id;
     this.name = name;
     this.status = status;
     this.type = type;
     this.publicLinkUrl = publicLinkUrl;
+    this.metadata = metadata;
   }
 
   static fromJson(json: Record<string, unknown>): Campaign {
@@ -111,7 +155,8 @@ export class Campaign {
       asString(json.name),
       asString(json.status),
       asString(json.type),
-      json.public_link_url == null ? undefined : String(json.public_link_url)
+      json.public_link_url == null ? undefined : String(json.public_link_url),
+      asRecord(json.metadata)
     );
   }
 
@@ -122,6 +167,7 @@ export class Campaign {
       status: this.status,
       type: this.type,
       public_link_url: this.publicLinkUrl,
+      metadata: this.metadata,
     };
   }
 }
@@ -134,6 +180,7 @@ export class Affiliate {
   instagramAccount: string;
   tiktokAccount: string;
   xAccount: string;
+  metadata: GoMarketMeMetadata;
 
   constructor(
     id: string,
@@ -142,7 +189,8 @@ export class Affiliate {
     countryCode: string,
     instagramAccount: string,
     tiktokAccount: string,
-    xAccount: string
+    xAccount: string,
+    metadata: GoMarketMeMetadata = {}
   ) {
     this.id = id;
     this.firstName = firstName;
@@ -151,6 +199,7 @@ export class Affiliate {
     this.instagramAccount = instagramAccount;
     this.tiktokAccount = tiktokAccount;
     this.xAccount = xAccount;
+    this.metadata = metadata;
   }
 
   static fromJson(json: Record<string, unknown>): Affiliate {
@@ -161,7 +210,8 @@ export class Affiliate {
       asString(json.country_code),
       asString(json.instagram_account),
       asString(json.tiktok_account),
-      asString(json.x_account)
+      asString(json.x_account),
+      asRecord(json.metadata)
     );
   }
 
@@ -174,7 +224,24 @@ export class Affiliate {
       instagram_account: this.instagramAccount,
       tiktok_account: this.tiktokAccount,
       x_account: this.xAccount,
+      metadata: this.metadata,
     };
+  }
+}
+
+export class AffiliateCampaign {
+  metadata: GoMarketMeMetadata;
+
+  constructor(metadata: GoMarketMeMetadata = {}) {
+    this.metadata = metadata;
+  }
+
+  static fromJson(json: Record<string, unknown>): AffiliateCampaign {
+    return new AffiliateCampaign(asRecord(json.metadata));
+  }
+
+  toJson(): Record<string, unknown> {
+    return { metadata: this.metadata };
   }
 }
 
@@ -202,7 +269,7 @@ export class SaleDistribution {
 class GoMarketMe {
   private static instance: GoMarketMe;
   private readonly sdkType = 'ReactNative';
-  private readonly sdkVersion = '6.0.0';
+  private readonly sdkVersion = '6.0.1';
   private isInitializing = false;
   private isInitialized = false;
   private initializationPromise?: Promise<void>;
@@ -297,12 +364,66 @@ class GoMarketMe {
     return data;
   }
 
+  /** Redeems a referral code from an app-owned UI and returns the resulting attribution data. */
+  public async redeemReferralCode(code: string): Promise<GoMarketMeAffiliateMarketingData> {
+    if (!this.isInitialized) {
+      throw new GoMarketMeReferralCodeError(
+        GoMarketMeReferralCodeErrorCode.NotInitialized,
+        GoMarketMeReferralCodeErrorCode.NotInitialized,
+        'Initialize GoMarketMe before redeeming a referral code.'
+      );
+    }
+    let response: Record<string, unknown>;
+    try {
+      response = await nativeModule().redeemReferralCode(code);
+    } catch (error) {
+      throw normalizeReferralCodeError(error);
+    }
+    const data = GoMarketMeAffiliateMarketingData.fromJson(response);
+    if (!data) {
+      throw new GoMarketMeReferralCodeError(
+        GoMarketMeReferralCodeErrorCode.InvalidResponse,
+        GoMarketMeReferralCodeErrorCode.InvalidResponse,
+        'GoMarketMe returned an invalid referral-code response.'
+      );
+    }
+    this.affiliateMarketingData = data;
+    return data;
+  }
+
   public stop(): void {
     nativeModule().stop?.();
     this.isInitialized = false;
     this.isInitializing = false;
     this.initializationPromise = undefined;
   }
+}
+
+function normalizeReferralCodeError(error: unknown): GoMarketMeReferralCodeError {
+  const nativeError = asRecord(error);
+  const userInfo = asRecord(nativeError.userInfo);
+  const rawCode = asString(userInfo.code || nativeError.code || 'request_failed');
+  const statusValue = userInfo.statusCode;
+  const statusCode = typeof statusValue === 'number' && statusValue > 0
+    ? statusValue
+    : undefined;
+  const knownCode = Object.values(GoMarketMeReferralCodeErrorCode).includes(
+    rawCode as GoMarketMeReferralCodeErrorCode
+  )
+    ? rawCode as GoMarketMeReferralCodeErrorCode
+    : GoMarketMeReferralCodeErrorCode.Unknown;
+  const isRetryable = typeof userInfo.isRetryable === 'boolean'
+    ? userInfo.isRetryable
+    : rawCode === 'network_error' || rawCode === 'timeout' ||
+      statusCode === 408 || statusCode === 425 || statusCode === 429 ||
+      (statusCode != null && statusCode >= 500);
+  return new GoMarketMeReferralCodeError(
+    knownCode,
+    rawCode,
+    asString(nativeError.message) || 'Referral code redemption failed.',
+    statusCode,
+    isRetryable
+  );
 }
 
 export type GoMarketMeReferralCodeTriggerProps = {

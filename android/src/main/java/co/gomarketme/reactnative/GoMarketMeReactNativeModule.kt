@@ -3,6 +3,7 @@ package co.gomarketme.reactnative
 import android.util.Log
 import co.gomarketme.core.GoMarketMeGoogleCore
 import co.gomarketme.core.GoMarketMeGoogleCoreConfiguration
+import co.gomarketme.core.GoMarketMeReferralException
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -14,6 +15,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.io.IOException
+import java.net.SocketTimeoutException
 
 class GoMarketMeReactNativeModule(
     private val reactContext: ReactApplicationContext
@@ -122,6 +125,45 @@ class GoMarketMeReactNativeModule(
             try { promise.resolve(googleCore.referralCodeSettings().toWritableMap()) }
             catch (error: Exception) { promise.reject("referral_settings_failed", error.message, error) }
         }
+    }
+
+    @ReactMethod
+    fun redeemReferralCode(code: String, promise: Promise) {
+        val googleCore = core
+        if (googleCore == null) {
+            promise.reject("not_initialized", "Initialize GoMarketMe first.")
+            return
+        }
+        scope.launch {
+            try { promise.resolve(googleCore.redeemReferralCode(code).toWritableMap()) }
+            catch (error: Exception) { rejectReferralCode(promise, error) }
+        }
+    }
+
+    private fun rejectReferralCode(promise: Promise, error: Exception) {
+        val rawCode = when (error) {
+            is GoMarketMeReferralException -> error.code
+            is SocketTimeoutException -> "timeout"
+            is IOException -> "network_error"
+            else -> "request_failed"
+        }
+        val statusCode = (error as? GoMarketMeReferralException)
+            ?.statusCode
+            ?.takeIf { it > 0 }
+        val isRetryable = rawCode == "network_error" || rawCode == "timeout" ||
+            statusCode == 408 || statusCode == 425 || statusCode == 429 ||
+            (statusCode != null && statusCode >= 500)
+        val userInfo = Arguments.createMap().apply {
+            putString("code", rawCode)
+            if (statusCode == null) putNull("statusCode") else putInt("statusCode", statusCode)
+            putBoolean("isRetryable", isRetryable)
+        }
+        promise.reject(
+            "referral_code_error",
+            error.message ?: "Referral code redemption failed.",
+            error,
+            userInfo
+        )
     }
 
     @ReactMethod
