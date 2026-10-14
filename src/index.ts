@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   NativeModules,
+  AppState,
   Pressable,
   Text,
   View,
@@ -59,6 +60,8 @@ export class GoMarketMeReferralCodeError extends Error {
 
 export type InitializeResponse = {
   initialized: boolean;
+  appInstallRef: string;
+  attributionMode: 'LinksOnly' | 'LinksAndReferralCodes' | 'ReferralCodesOnly';
   platform: 'ios' | 'android';
   source: 'app_store' | 'google_play' | string;
   affiliateMarketingData?: Record<string, unknown> | null;
@@ -78,6 +81,7 @@ export class GoMarketMeAffiliateMarketingData {
   saleDistribution: SaleDistribution;
   affiliateCampaignCode: string;
   deviceId: string;
+  appInstallRef?: string;
   offerCode?: string;
   referralCode?: string;
 
@@ -89,20 +93,22 @@ export class GoMarketMeAffiliateMarketingData {
     deviceId: string,
     offerCode?: string,
     referralCode?: string,
-    affiliateCampaign: AffiliateCampaign = new AffiliateCampaign()
+    affiliateCampaign: AffiliateCampaign = new AffiliateCampaign(),
+    appInstallRef?: string
   ) {
     this.campaign = campaign;
     this.affiliate = affiliate;
     this.saleDistribution = saleDistribution;
     this.affiliateCampaignCode = affiliateCampaignCode;
     this.deviceId = deviceId;
+    this.appInstallRef = appInstallRef;
     this.offerCode = offerCode;
     this.referralCode = referralCode;
     this.affiliateCampaign = affiliateCampaign;
   }
 
   static fromJson(json?: Record<string, unknown> | null): GoMarketMeAffiliateMarketingData | null {
-    if (!json || Object.keys(json).length === 0) {
+    if (!json || !asString(json.affiliate_campaign_code)) {
       return null;
     }
 
@@ -111,10 +117,11 @@ export class GoMarketMeAffiliateMarketingData {
       Affiliate.fromJson(asRecord(json.affiliate)),
       SaleDistribution.fromJson(asRecord(json.sale_distribution)),
       asString(json.affiliate_campaign_code),
-      asString(json.device_id),
+      json.app_install_ref ? '' : asString(json.device_id),
       json.offer_code == null ? undefined : String(json.offer_code),
       json.referral_code == null ? undefined : String(json.referral_code),
-      AffiliateCampaign.fromJson(asRecord(json.affiliate_campaign))
+      AffiliateCampaign.fromJson(asRecord(json.affiliate_campaign)),
+      json.app_install_ref ? String(json.app_install_ref) : undefined
     );
   }
 
@@ -125,7 +132,7 @@ export class GoMarketMeAffiliateMarketingData {
       affiliate_campaign: this.affiliateCampaign.toJson(),
       sale_distribution: this.saleDistribution.toJson(),
       affiliate_campaign_code: this.affiliateCampaignCode,
-      device_id: this.deviceId,
+      ...(this.appInstallRef ? {app_install_ref: this.appInstallRef} : {device_id: this.deviceId}),
       offer_code: this.offerCode,
       referral_code: this.referralCode,
     };
@@ -269,11 +276,23 @@ export class SaleDistribution {
 class GoMarketMe {
   private static instance: GoMarketMe;
   private readonly sdkType = 'ReactNative';
-  private readonly sdkVersion = '6.0.1';
+  private readonly sdkVersion = '6.0.2';
   private isInitializing = false;
   private isInitialized = false;
   private initializationPromise?: Promise<void>;
   public affiliateMarketingData?: GoMarketMeAffiliateMarketingData | null;
+  public appInstallRef?: string;
+  public attributionMode?: InitializeResponse['attributionMode'];
+  private apiKey?: string;
+  private foregroundSubscription?: {remove(): void};
+  private readonly listeners = new Set<() => void>();
+
+  public subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  private notify(): void { this.listeners.forEach(listener => listener()); }
 
   private constructor() {}
 
@@ -297,17 +316,23 @@ class GoMarketMe {
       return;
     }
 
-    if (this.isInitialized) {
-      log('Initialization skipped because SDK is already initialized or initializing.');
-      return;
-    }
-
     if (this.initializationPromise) {
       return this.initializationPromise;
     }
 
     this.isInitializing = true;
-    this.initializationPromise = (async () => {
+    this.isInitialized = false;
+    this.apiKey = trimmedApiKey;
+    if (!this.foregroundSubscription) {
+      this.foregroundSubscription = AppState.addEventListener('change', state => {
+        if (state === 'active' && this.apiKey) {
+          this.initialize(this.apiKey).catch(error => log(`Configuration refresh failed: ${String(error)}`));
+        }
+      });
+    }
+    this.notify();
+    // Defer bridge invocation until the in-flight promise is registered, even if it throws synchronously.
+    this.initializationPromise = Promise.resolve().then(async () => {
       try {
         const response = await nativeModule().initialize(
           trimmedApiKey,
@@ -316,16 +341,25 @@ class GoMarketMe {
           !__DEV__
         );
 
+        if (!response.initialized || !response.appInstallRef ||
+            !['LinksOnly', 'LinksAndReferralCodes', 'ReferralCodesOnly'].includes(response.attributionMode)) {
+          throw new Error('GoMarketMe returned an invalid initialization response.');
+        }
+        this.appInstallRef = response.appInstallRef;
+        this.attributionMode = response.attributionMode;
         this.affiliateMarketingData = GoMarketMeAffiliateMarketingData.fromJson(
           response.affiliateMarketingData ?? null
         );
         this.isInitialized = true;
       } catch (error) {
         log(`Error initializing GoMarketMe: ${String(error)}`);
+        throw error;
       } finally {
         this.isInitializing = false;
+        this.initializationPromise = undefined;
+        this.notify();
       }
-    })();
+    });
     return this.initializationPromise;
   }
 
@@ -361,6 +395,7 @@ class GoMarketMe {
     if (response == null) return null;
     const data = GoMarketMeAffiliateMarketingData.fromJson(response);
     this.affiliateMarketingData = data;
+    this.notify();
     return data;
   }
 
@@ -388,6 +423,7 @@ class GoMarketMe {
       );
     }
     this.affiliateMarketingData = data;
+    this.notify();
     return data;
   }
 
@@ -396,6 +432,13 @@ class GoMarketMe {
     this.isInitialized = false;
     this.isInitializing = false;
     this.initializationPromise = undefined;
+    this.foregroundSubscription?.remove();
+    this.foregroundSubscription = undefined;
+    this.apiKey = undefined;
+    this.appInstallRef = undefined;
+    this.attributionMode = undefined;
+    this.affiliateMarketingData = null;
+    this.notify();
   }
 }
 
@@ -474,9 +517,12 @@ export function GoMarketMeReferralCodeTrigger({
   const sdk = GoMarketMe.getInstance();
   const [settings, setSettings] = useState<TriggerSettings | null>(null);
   const [opening, setOpening] = useState(false);
+  const [configurationRevision, setConfigurationRevision] = useState(0);
+  useEffect(() => sdk.subscribe(() => setConfigurationRevision(value => value + 1)), [sdk]);
 
   useEffect(() => {
     let active = true;
+    setSettings(null);
     sdk.referralCodeSettings()
       .then(response => {
         if (active) setSettings(normalizeTriggerSettings(response));
@@ -486,7 +532,7 @@ export function GoMarketMeReferralCodeTrigger({
         onError?.(error);
       });
     return () => { active = false; };
-  }, [sdk]);
+  }, [sdk, configurationRevision]);
 
   if (!settings) return null;
   const isLink = settings.triggerType === 'link';

@@ -49,6 +49,8 @@ class GoMarketMeReactNativeModule(
         )
 
         val googleCore = core ?: GoMarketMeGoogleCore(reactContext.applicationContext)
+        core = googleCore
+        googleCore.pauseAppInstallAttribution()
 
         if (IS_DEBUG_LOGGING_ENABLED) {
             googleCore.onPurchase = { event ->
@@ -65,7 +67,7 @@ class GoMarketMeReactNativeModule(
 
         scope.launch {
             try {
-                val prepared = googleCore.prepareAttribution(initialConfiguration)
+                val prepared = googleCore.prepareAppInstallAttribution(initialConfiguration)
                 val config = prepared.first
                 val affiliateMarketingData = prepared.second
 
@@ -75,6 +77,8 @@ class GoMarketMeReactNativeModule(
 
                 val response = Arguments.createMap().apply {
                     putBoolean("initialized", true)
+                    putString("appInstallRef", config.appInstallRef)
+                    putString("attributionMode", config.attributionMode)
                     putString("platform", "android")
                     putString("source", config.sourceName)
                     putMap("affiliateMarketingData", affiliateMarketingData.toWritableMap())

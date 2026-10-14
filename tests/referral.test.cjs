@@ -5,7 +5,7 @@ const Module = require('node:module');
 test('referral results update affiliate data and cancellation/errors preserve it', async () => {
   global.__DEV__ = false;
   const native = {
-    initialize: async () => ({initialized: true}),
+    initialize: async () => ({initialized: true, appInstallRef:'install-reference', attributionMode:'LinksAndReferralCodes'}),
     getReferralCodeSettings: async () => ({marketer_settings:{triggerText:'Referral code'}}),
     showReferralCodeSheet: async (trigger) => {
       assert.equal(trigger, true);
@@ -13,9 +13,10 @@ test('referral results update affiliate data and cancellation/errors preserve it
     },
     redeemReferralCode: async (code) => ({affiliate_campaign_code:'campaign',device_id:'device',campaign:{id:'campaign',metadata:{paywall_variant:'creator-offer'}},affiliate:{id:'creator',metadata:{profile_image_url:'https://example.com/jake.jpg'}},affiliate_campaign:{metadata:{offers:{ios:{monthly:{code:'MONTHLY10'}}}}},sale_distribution:{},referral_code:code}),
   };
+  let foreground;
   const original = Module._load;
   Module._load = function(name,...args) {
-    return name === 'react-native' ? {NativeModules:{GoMarketMeReactNative:native}} : original.call(this,name,...args);
+    return name === 'react-native' ? {NativeModules:{GoMarketMeReactNative:native}, AppState:{addEventListener:(_event, listener) => { foreground = listener; return {remove(){}}; }}} : original.call(this,name,...args);
   };
   let sdk;
   let exports;
@@ -30,6 +31,33 @@ test('referral results update affiliate data and cancellation/errors preserve it
   const settings = sdk.referralCodeSettings();
   await sdk.initialize('test-key');
   assert.equal((await settings).marketer_settings.triggerText, 'Referral code');
+  assert.equal(sdk.appInstallRef, 'install-reference');
+  assert.equal((sdk.attributionMode == 'ReferralCodesOnly'), false);
+  native.initialize = async () => ({initialized:true,appInstallRef:'install-reference',attributionMode:'unknown'});
+  await assert.rejects(sdk.initialize('test-key'), /invalid initialization/);
+  assert.equal(sdk.initialized, false);
+  native.initialize = async () => ({initialized:true,appInstallRef:'install-reference',attributionMode:'ReferralCodesOnly'});
+  foreground('active');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(sdk.initialized, true);
+  assert.equal((sdk.attributionMode == 'ReferralCodesOnly'), true);
+  native.initialize = async () => ({initialized:true,appInstallRef:'install-reference',attributionMode:'ReferralCodesOnly'});
+  await sdk.initialize('test-key');
+  assert.equal((sdk.attributionMode == 'ReferralCodesOnly'), true);
+  native.initialize = async () => { throw Error('offline'); };
+  await assert.rejects(sdk.initialize('test-key'), /offline/);
+  assert.equal(sdk.initialized, false);
+  native.initialize = () => { throw Error('bridge unavailable'); };
+  await assert.rejects(sdk.initialize('test-key'), /bridge unavailable/);
+  native.initialize = async () => ({initialized:true,appInstallRef:'install-reference',attributionMode:'LinksOnly'});
+  await sdk.initialize('test-key');
+  assert.equal(sdk.initialized, true);
+  assert.equal((sdk.attributionMode == 'ReferralCodesOnly'), false);
+  const installData = exports.GoMarketMeAffiliateMarketingData.fromJson({affiliate_campaign_code:'campaign',app_install_ref:'install-reference',device_id:'legacy'});
+  assert.equal(installData.deviceId, '');
+  assert.equal(installData.toJson().app_install_ref, 'install-reference');
+  assert.equal('device_id' in installData.toJson(), false);
+  assert.equal(exports.GoMarketMeAffiliateMarketingData.fromJson({affiliate_campaign_code:'',app_install_ref:'install-reference'}), null);
 
   const data = await sdk.showReferralCodeSheet(true);
   assert.equal(data.affiliate.id,'creator');

@@ -63,26 +63,31 @@ class GoMarketMeReactNative: NSObject {
         }
 
         Task {
-            let prepared = await appleCore.prepareAttribution(configuration: initialConfiguration)
+            do {
+                appleCore.stop()
+                let prepared = try await appleCore.prepareAppInstallAttribution(configuration: initialConfiguration)
 
-            appleCore.configure(prepared.configuration)
+                appleCore.configure(prepared.configuration)
 
-            if isDebugLoggingEnabled {
-                NSLog("[GoMarketMe React Native iOS] starting Apple core")
-            }
+                if isDebugLoggingEnabled {
+                    NSLog("[GoMarketMe React Native iOS] starting Apple core")
+                }
 
-            appleCore.start()
-            self.core = appleCore
+                appleCore.start()
+                self.core = appleCore
 
-            let response: [String: Any] = [
-                "initialized": true,
-                "platform": "ios",
-                "source": prepared.configuration.sourceName,
-                "affiliateMarketingData": prepared.affiliateMarketingData ?? [:]
-            ]
+                let response: [String: Any] = [
+                    "initialized": true,
+                    "appInstallRef": prepared.configuration.appInstallRef ?? "",
+                    "attributionMode": prepared.configuration.attributionMode ?? "",
+                    "platform": "ios",
+                    "source": prepared.configuration.sourceName,
+                    "affiliateMarketingData": prepared.affiliateMarketingData ?? [:]
+                ]
 
-            DispatchQueue.main.async {
-                resolve(response)
+                DispatchQueue.main.async { resolve(response) }
+            } catch {
+                reject("initialize_failed", error.localizedDescription, error)
             }
         }
     }

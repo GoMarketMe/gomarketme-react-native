@@ -15,19 +15,19 @@
 ### npm
 
 ```bash
-npm install gomarketme-react-native@6.0.1
+npm install gomarketme-react-native@6.0.2
 ```
 
 ### Yarn
 
 ```bash
-yarn add gomarketme-react-native@6.0.1
+yarn add gomarketme-react-native@6.0.2
 ```
 
 ### pnpm
 
 ```bash
-pnpm add gomarketme-react-native@6.0.1
+pnpm add gomarketme-react-native@6.0.2
 ```
 
 ## Usage
@@ -43,7 +43,9 @@ import { useEffect } from 'react';
 import GoMarketMe from 'gomarketme-react-native';
 
 useEffect(() => {
-  void GoMarketMe.initialize('API_KEY');
+  void GoMarketMe.initialize('API_KEY').catch(error => {
+    console.error('GoMarketMe initialization failed; retry on the next initialization.', error);
+  });
 }, []);
 ```
 
@@ -159,7 +161,8 @@ The returned data includes:
     "affiliatePercentage": "20"
   },
   "affiliateCampaignCode": "affiliate-campaign-code",
-  "deviceId": "device-id",
+  "appInstallRef": "installation-uuid",
+  "deviceId": "", // deprecated in 6.0.2 - use appInstallRef instead
   "offerCode": null, // null unless this is an offer-code campaign
   "referralCode": "ASHLEY10" // null unless attribution used a referral code
 }
@@ -168,7 +171,7 @@ The returned data includes:
 - `campaign.metadata` is configured under **Campaign detail > Advanced > Campaign-level metadata**.
 - `affiliateCampaign.metadata` is configured under **Campaign detail > Affiliates > Invite or edit affiliate > Advanced > Affiliate-level metadata for this campaign**.
 
-Every property shown above is present when attribution exists. Optional values are `undefined` when they do not apply. The configurable metadata objects are always present and are empty when no metadata is configured; GoMarketMe returns their free-form contents without interpreting them. If no attribution exists, `affiliateMarketingData` is `null` or `undefined`.
+Every property shown above is present when attribution exists. Optional values are `undefined` when they do not apply. Metadata objects are empty when no metadata is configured; GoMarketMe returns their contents without interpreting them. If `affiliateMarketingData.affiliateCampaignCode` is populated, the app install is attributed to an affiliate.
 
 Learn more about [Programmatic Affiliate Marketing](https://gomarketme.co/programmatic-affiliate-marketing/).
 

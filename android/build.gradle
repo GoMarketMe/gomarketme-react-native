@@ -40,7 +40,7 @@ repositories {
 }
 
 dependencies {
-  implementation files('libs/core-6.0.0.jar')
+  implementation files('libs/core-6.0.2.jar')
   implementation 'com.android.billingclient:billing:8.3.0'
   implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
   compileOnly 'com.facebook.react:react-android:+'
